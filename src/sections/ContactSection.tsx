@@ -271,16 +271,29 @@ export function ContactSection() {
         idempotency_key: crypto.randomUUID(),
         routing_target_domain: 'leads',
 
-        // Lead fields
-        name: fullName || formData.firstName || 'Web Contact',
-        email: formData.email || undefined,
-        phone: formData.phone || undefined,
-        property_interest: formData.interest || undefined,
-        message: formData.message || undefined,
-        notes: {
-          message: formData.message || null,
-          newsletter_opt_in: formData.newsletter,
+        // Canonical Intake Contract fields
+        applicant: {
+          full_name: fullName || formData.firstName || 'Web Contact',
+          email: formData.email,
+          phone: formData.phone || undefined,
         },
+        contact_email: formData.email,
+        email: formData.email,
+        name: fullName || formData.firstName || 'Web Contact',
+        phone: formData.phone || undefined,
+
+        context: {
+          property_interest: formData.interest || undefined,
+          message: formData.message || undefined,
+          newsletter_opt_in: formData.newsletter,
+          source_url: window.location.href,
+          source_referrer: document.referrer || undefined,
+        },
+        consent: {
+          privacy_accepted: formData.privacyAccepted,
+          gdpr_consent: formData.privacyAccepted,
+        },
+
         source_system: 'cta_web',
         source_channel: 'website',
         source_detail: 'private-estates-contact-form',
