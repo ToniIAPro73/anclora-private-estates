@@ -3,32 +3,9 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useTranslation } from 'react-i18next';
 import { MapPin, Phone, Mail, ArrowRight, Calendar, Send, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useTurnstile } from '../hooks/useTurnstile';
 
 gsap.registerPlugin(ScrollTrigger);
-
-type CaptchaProvider = 'none' | 'recaptcha' | 'altcha';
-
-type RecaptchaApi = {
-  ready: (callback: () => void) => void;
-  render: (
-    container: HTMLElement,
-    parameters: {
-      sitekey: string;
-      size?: 'normal' | 'compact';
-      callback?: (token: string) => void;
-      'expired-callback'?: () => void;
-      'error-callback'?: () => void;
-      theme?: 'light' | 'dark';
-    }
-  ) => number;
-  reset: (widgetId?: number) => void;
-};
-
-declare global {
-  interface Window {
-    grecaptcha?: RecaptchaApi;
-  }
-}
 
 const contactInfo = [
   {
@@ -57,22 +34,12 @@ export function ContactSection() {
   const contactCardRef = useRef<HTMLDivElement>(null);
   const detailsRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
-  const recaptchaSiteKey =
-    import.meta.env.VITE_RECAPTCHA_SITE_KEY ??
-    import.meta.env.VITE_RECAPTCHA_SITEKEY ??
-    import.meta.env.VITE_RECAPTCHA_KEY ??
-    '';
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? '';
   const nexusPublicLeadUrl =
     import.meta.env.VITE_ANCLORA_NEXUS_PUBLIC_LEAD_URL ??
     import.meta.env.VITE_NEXUS_PUBLIC_LEAD_URL ??
     '/api/public/intake/commercial-leads';
-  const captchaProviderRaw = (
-    import.meta.env.VITE_CONTACT_CAPTCHA_PROVIDER ??
-    (recaptchaSiteKey ? 'recaptcha' : 'none')
-  ).toLowerCase();
-  const captchaProvider: CaptchaProvider =
-    captchaProviderRaw === 'recaptcha' || captchaProviderRaw === 'altcha' ? captchaProviderRaw : 'none';
-  const altchaChallengeUrl = import.meta.env.VITE_ALTCHA_CHALLENGE_URL ?? '';
+  const captchaProvider = 'turnstile' as const;
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -87,10 +54,12 @@ export function ContactSection() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [submitError, setSubmitError] = useState('');
-  const [captchaToken, setCaptchaToken] = useState('');
-  const [captchaReady, setCaptchaReady] = useState(captchaProvider === 'none');
-  const recaptchaContainerRef = useRef<HTMLDivElement>(null);
-  const recaptchaWidgetIdRef = useRef<number | null>(null);
+  const {
+    captchaToken,
+    captchaStatus,
+    captchaContainerRef,
+    resetCaptcha,
+  } = useTurnstile(turnstileSiteKey, 'private_estates_contact');
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -155,103 +124,18 @@ export function ContactSection() {
     return () => ctx.revert();
   }, [t]);
 
-  useEffect(() => {
-    if (captchaProvider === 'none') {
-      setCaptchaReady(true);
-      return;
-    }
-
-    if (captchaProvider === 'recaptcha') {
-      if (!recaptchaSiteKey) {
-        setCaptchaReady(false);
-        return;
-      }
-
-      const renderWidget = () => {
-        const api = window.grecaptcha;
-        const container = recaptchaContainerRef.current;
-        if (!api || !container || recaptchaWidgetIdRef.current !== null) return;
-        const isMobileViewport = window.matchMedia('(max-width: 420px)').matches;
-
-        api.ready(() => {
-          recaptchaWidgetIdRef.current = api.render(container, {
-            sitekey: recaptchaSiteKey,
-            theme: 'dark',
-            size: isMobileViewport ? 'compact' : 'normal',
-            callback: (token) => setCaptchaToken(token),
-            'expired-callback': () => setCaptchaToken(''),
-            'error-callback': () => setCaptchaToken(''),
-          });
-          setCaptchaReady(true);
-        });
-      };
-
-      if (window.grecaptcha) {
-        renderWidget();
-        return;
-      }
-
-      const existingScript = document.querySelector<HTMLScriptElement>('script[data-anclora-recaptcha="true"]');
-      if (existingScript) {
-        existingScript.addEventListener('load', renderWidget, { once: true });
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://www.google.com/recaptcha/api.js?render=explicit';
-      script.async = true;
-      script.defer = true;
-      script.dataset.ancloraRecaptcha = 'true';
-      script.addEventListener('load', renderWidget, { once: true });
-      document.head.appendChild(script);
-      return;
-    }
-
-    if (captchaProvider === 'altcha') {
-      if (!altchaChallengeUrl) {
-        setCaptchaReady(false);
-        return;
-      }
-
-      setCaptchaReady(true);
-      const existingScript = document.querySelector<HTMLScriptElement>('script[data-anclora-altcha="true"]');
-      if (existingScript) return;
-
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/altcha/dist/altcha.min.js';
-      script.type = 'module';
-      script.async = true;
-      script.dataset.ancloraAltcha = 'true';
-      document.head.appendChild(script);
-    }
-  }, [altchaChallengeUrl, captchaProvider, recaptchaSiteKey]);
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const formElement = event.currentTarget as HTMLFormElement;
-
     if (!formData.privacyAccepted) {
       setSubmitStatus('error');
       setSubmitError(t('contact.form.privacyRequired'));
       return;
     }
 
-    if (captchaProvider === 'recaptcha' && !captchaToken) {
+    if (!turnstileSiteKey || !captchaToken) {
       setSubmitStatus('error');
       setSubmitError(t('contact.form.captchaRequired'));
       return;
-    }
-
-    let altchaPayload: string | undefined;
-    if (captchaProvider === 'altcha') {
-      const value = new FormData(formElement).get('altcha');
-      altchaPayload = typeof value === 'string' ? value : '';
-
-      if (!altchaPayload) {
-        setSubmitStatus('error');
-        setSubmitError(t('contact.form.captchaRequired'));
-        return;
-      }
     }
 
     setIsSubmitting(true);
@@ -299,15 +183,8 @@ export function ContactSection() {
         source_detail: 'private-estates-contact-form',
         source_url: window.location.href,
         source_referrer: document.referrer || undefined,
-        captcha_provider: captchaProvider !== 'none' ? captchaProvider : undefined,
-        captcha_token: captchaProvider === 'recaptcha' ? captchaToken : undefined,
-        altcha_payload: captchaProvider === 'altcha' ? altchaPayload : undefined,
-        captcha:
-          captchaProvider === 'recaptcha'
-            ? { provider: 'recaptcha', token: captchaToken }
-            : captchaProvider === 'altcha'
-              ? { provider: 'altcha', payload: altchaPayload }
-              : undefined,
+        captcha_provider: captchaProvider,
+        captcha_token: captchaToken,
       };
 
       const response = await fetch(nexusPublicLeadUrl, {
@@ -334,10 +211,7 @@ export function ContactSection() {
         newsletter: false,
         privacyAccepted: false,
       });
-      setCaptchaToken('');
-      if (captchaProvider === 'recaptcha' && window.grecaptcha && recaptchaWidgetIdRef.current !== null) {
-        window.grecaptcha.reset(recaptchaWidgetIdRef.current);
-      }
+      resetCaptcha();
     } catch (error) {
       setSubmitStatus('error');
       setSubmitError(error instanceof Error ? error.message : t('contact.form.error'));
@@ -542,42 +416,23 @@ export function ContactSection() {
                 </div>
 
                 <div className="lg:col-span-2 space-y-2.5 mt-1">
-                  {captchaProvider !== 'none' && (
-                    <div className="captcha-shell">
-                      <p className="text-sm text-anclora-text-muted mb-3">{t('contact.form.captchaLabel')}</p>
-
-                      {captchaProvider === 'recaptcha' && (
-                        <>
-                          {!recaptchaSiteKey ? (
-                            <p className="text-sm text-red-200">{t('contact.form.captchaNotConfigured')}</p>
-                          ) : (
-                            <>
-                              <div ref={recaptchaContainerRef} className="captcha-widget-frame" />
-                              {!captchaToken && (
-                                <p className="text-xs text-anclora-text-muted mt-3">
-                                  {captchaReady ? t('contact.form.captchaVerifyPrompt') : t('contact.form.captchaLoading')}
-                                </p>
-                              )}
-                            </>
-                          )}
-                        </>
-                      )}
-
-                      {captchaProvider === 'altcha' && (
-                        <>
-                          {!altchaChallengeUrl ? (
-                            <p className="text-sm text-red-200">{t('contact.form.captchaNotConfigured')}</p>
-                          ) : (
-                            <>
-                              {/* ALTCHA web component loaded via external script */}
-                              {React.createElement('altcha-widget', { challengeurl: altchaChallengeUrl, name: 'altcha' })}
-                              <p className="text-xs text-anclora-text-muted mt-3">{t('contact.form.captchaVerifyPrompt')}</p>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
+                  <div className="captcha-shell">
+                    <p className="text-sm text-anclora-text-muted mb-3">{t('contact.form.captchaLabel')}</p>
+                    {!turnstileSiteKey ? (
+                      <p className="text-sm text-red-200">{t('contact.form.captchaNotConfigured')}</p>
+                    ) : (
+                      <>
+                        <div ref={captchaContainerRef} className="captcha-widget-frame" />
+                        {!captchaToken && (
+                          <p className="text-xs text-anclora-text-muted mt-3">
+                            {captchaStatus === 'loading'
+                              ? t('contact.form.captchaLoading')
+                              : t('contact.form.captchaVerifyPrompt')}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
 
                   <label className="flex items-start gap-2.5 text-sm text-anclora-text-muted cursor-pointer">
                     <input
@@ -614,8 +469,8 @@ export function ContactSection() {
                     disabled={
                       isSubmitting ||
                       !formData.privacyAccepted ||
-                      (captchaProvider === 'recaptcha' && (!recaptchaSiteKey || !captchaToken)) ||
-                      (captchaProvider === 'altcha' && !altchaChallengeUrl)
+                      !turnstileSiteKey ||
+                      !captchaToken
                     }
                     className="btn-anclora-premium inline-flex items-center gap-2 !min-w-[220px] disabled:opacity-70 disabled:cursor-not-allowed"
                   >
