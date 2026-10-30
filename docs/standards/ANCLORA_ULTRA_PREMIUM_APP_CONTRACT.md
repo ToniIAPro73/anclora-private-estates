@@ -6,10 +6,12 @@ Definir el contrato UX/UI de la capa más exclusiva del ecosistema. La experienc
 Ámbito:
 - `anclora-private-estates`
 
+> **Logo Ultra Premium fuera de la familia (CHG-0014, 2026-09-25):** `anclora-portfolio`, `anclora-azure-bay-landing` y `anclora-portfolio-showcase` usan el logo Ultra Premium dorado por ser aplicaciones de muestra del vertical inmobiliario de lujo, pero su UX se sigue gobernando por `ANCLORA_PORTFOLIO_SHOWCASE_CONTRACT.md`, no por este contrato.
+
 ## Autoridad
 
-- Registro operativo: `contracts/governance/contracts-registry.json`
-- Inventario aplicable: `docs/governance/ecosystem-repos.json`
+- Registro operativo: `00-governance/registry/contracts-registry.json`
+- Inventario aplicable: `00-governance/registry/ecosystem-repos.json`
 - Fuente ejecutable relacionada: `anclora-design-system`
 
 ## Repos a los que aplica
@@ -18,9 +20,9 @@ Definir el contrato UX/UI de la capa más exclusiva del ecosistema. La experienc
 
 ## Sincronización con repos consumidores
 
-- Contrato fuente en la bóveda: `contracts/core/ANCLORA_ULTRA_PREMIUM_APP_CONTRACT.md`
-- Target normal de propagación: `docs/standards/`
-- Dependencia de auditoría y propagación desde `contracts/governance/contracts-registry.json`
+- Contrato fuente en la bóveda: `00-governance/contracts/core/ANCLORA_ULTRA_PREMIUM_APP_CONTRACT.md`
+- Target normal de propagación: `10-group/brand/`
+- Dependencia de auditoría y propagación desde `00-governance/registry/contracts-registry.json`
 
 ## Piezas canónicas del design system
 
